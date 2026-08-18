@@ -2,7 +2,7 @@
 
 An interactive, single-file explorer for [Wolfram's Rule 30](https://en.wikipedia.org/wiki/Rule_30) — one of the elementary cellular automata, and the one Stephen Wolfram is most famous for. Starting from a single live cell, it grows into a triangle with an ordered, repeating stripe pattern on the left and irreducibly chaotic noise on the right. It's random enough that Wolfram Research has used it as an actual random number generator.
 
-**[Live demo →](#)** *(enable GitHub Pages — see below — and this link will work)*
+**[Live demo →](https://tkluysk.github.io/rule-30-explorer/)**
 
 ## Features
 
