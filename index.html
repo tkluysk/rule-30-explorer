@@ -44,7 +44,20 @@
     letter-spacing:0.08em;
     color:var(--accent2);
     margin:0 0 14px;
+    cursor:pointer;
+    user-select:none;
+    display:flex;
+    align-items:center;
+    gap:8px;
   }
+  .card h2::before{
+    content:'▾';
+    font-size:0.8em;
+    transition:transform .15s ease;
+  }
+  .card.collapsed h2{ margin-bottom:0; }
+  .card.collapsed h2::before{ transform:rotate(-90deg); }
+  .card.collapsed > :not(h2){ display:none; }
 
   /* Rule table */
   .rule-table{
@@ -66,21 +79,27 @@
     border-color:var(--accent);
     box-shadow:0 0 0 1px var(--accent) inset;
   }
+  .rule-item.hover-rule,
+  .rule-item.active-rule.hover-rule{
+    border-color:var(--accent2);
+    box-shadow:0 0 0 1px var(--accent2) inset;
+    transform:translateY(-3px);
+  }
   .triplet{display:flex;gap:2px;justify-content:center;margin-bottom:6px;}
   .cell{
     width:16px;height:16px;border-radius:3px;
-    background:var(--off);
-    border:1px solid var(--border);
+    background:#3a4150;
+    border:1px solid #4a5262;
   }
-  .cell.on{background:var(--on);border-color:var(--on);}
+  .cell.on{background:var(--ink);border-color:var(--ink);}
   .arrow{color:var(--dim);font-size:0.7rem;margin:2px 0;}
   .result{
     width:16px;height:16px;border-radius:3px;
     margin:0 auto;
-    background:var(--off);
-    border:1px solid var(--border);
+    background:#3a4150;
+    border:1px solid #4a5262;
   }
-  .result.on{background:var(--accent2);border-color:var(--accent2);}
+  .result.on{background:var(--ink);border-color:var(--ink);}
   .rule-label{font-size:0.65rem;color:var(--dim);margin-top:4px;}
 
   /* Controls */
@@ -144,8 +163,6 @@
     top:0;
     left:0;
     transform-origin:0 0;
-    image-rendering:pixelated;
-    image-rendering:crisp-edges;
     display:block;
   }
   .zoom-bar{
@@ -190,6 +207,56 @@
     .rule-item{width:64px;}
     .cell,.result{width:13px;height:13px;}
   }
+
+  /* Practice grid */
+  .practice-grid{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    align-items:center;
+    margin:6px 0 4px;
+  }
+  .practice-row{display:flex;gap:6px;}
+  .pcell{
+    width:44px;height:44px;
+    border-radius:8px;
+    background:#3a4150;
+    border:1px solid #4a5262;
+    padding:0;
+    transition:background .1s ease, box-shadow .1s ease, border-color .1s ease;
+  }
+  .pcell.on{background:var(--ink);border-color:var(--ink);}
+  .pcell.revealed{cursor:default;}
+  .pcell.editable{cursor:pointer;border-color:var(--accent);border-style:dashed;}
+  .pcell.editable:hover{box-shadow:0 0 0 2px var(--accent) inset;}
+  .pcell.locked{cursor:default;opacity:.6;}
+  .pcell.correct{border-color:#3ddc84;box-shadow:0 0 0 3px #3ddc84;}
+  .pcell.wrong{border-color:#ff4d4d;box-shadow:0 0 0 3px #ff4d4d;}
+  .pcell.nb-hi{box-shadow:0 0 0 2px var(--accent2);}
+  .practice-status{font-size:0.85rem;color:var(--dim);margin-top:8px;min-height:1.2em;}
+  .practice-status b{color:var(--ink);}
+  @media (max-width:520px){
+    .pcell{width:34px;height:34px;}
+  }
+
+  /* Zoom-in viewer */
+  #zoomLayers{
+    position:absolute;
+    top:0;
+    left:0;
+    transform-origin:0 0;
+  }
+  #zoomLayers img{
+    position:absolute;
+    top:0;
+    left:0;
+    display:block;
+    width:4000px;
+    height:2000px;
+    -webkit-user-drag:none;
+    user-select:none;
+  }
+  #zoomDetail{opacity:0;}
 </style>
 </head>
 <body>
@@ -212,6 +279,21 @@
   </div>
 
   <div class="card">
+    <h2>Try It Yourself</h2>
+    <p style="color:var(--dim); font-size:0.9rem; margin-top:0;">
+      The top row is the seed — a single lit cell. Toggle the cells in the next row to predict what
+      Rule 30 produces, then press <b style="color:var(--ink)">Show step</b> to reveal the real values and
+      check your guesses. Correct cells get a green ring, wrong ones red. Then predict the row after that.
+    </p>
+    <div class="practice-grid" id="practiceGrid"></div>
+    <div class="controls" style="justify-content:center;margin-top:12px;margin-bottom:0;">
+      <button class="primary" id="practiceStepBtn">Show step</button>
+      <button id="practiceResetBtn">Reset practice</button>
+    </div>
+    <div class="practice-status" id="practiceStatus"></div>
+  </div>
+
+  <div class="card">
     <h2>Explore</h2>
     <div class="controls">
       <button class="primary" id="playBtn">▶ Play</button>
@@ -226,7 +308,7 @@
       </select>
       <div class="field">
         Speed
-        <input type="range" id="speed" min="1" max="20" value="8">
+        <input type="range" id="speed" min="1" max="20" value="20">
       </div>
       <div class="field">
         Cell size (px per cell)
@@ -261,6 +343,37 @@
     </div>
   </div>
 
+  <div class="card">
+    <h2>Zoom In</h2>
+    <p style="color:var(--dim); font-size:0.9rem; margin-top:0;">
+      A finished run — 1000 generations from a single cell, rendered at 4000×2000. Drag to pan, scroll or
+      pinch to zoom.
+    </p>
+    <div class="canvas-wrap">
+      <div class="viewport" id="zoomViewport">
+        <div id="zoomLayers">
+          <img id="zoomBase" alt="Rule 30, 1000 generations" src="rule-30_4000x2000_gen999.png" draggable="false">
+          <img id="zoomDetail" alt="" src="rule-30_4000x2000_gen999 copy.png" draggable="false">
+        </div>
+      </div>
+      <div class="zoom-bar">
+        <button id="zzOut">−</button>
+        <span id="zzLabel">100%</span>
+        <button id="zzIn">+</button>
+        <button id="zzFit" style="margin-left:auto;font-size:0.78rem;padding:4px 10px;">Fit</button>
+      </div>
+    </div>
+    <div class="stats">
+      <span>Zoom: <b id="zzReveal">hidden</b></span>
+      <span title="Normalized 2×2 block entropy of the visible crop — 1.00 = maximally disordered, 0 = perfectly regular">Chaos (visible crop): <b id="zzChaos">–</b></span>
+    </div>
+    <div class="hint">
+      The number is the <b>normalized block entropy</b> of whatever's on screen: it counts how evenly the
+      2×2 pixel patterns are distributed. The chaotic bulk sits near 1.00; it dips over the sparse tip, the
+      diagonal edge lanes, and — faintly — wherever there's hidden structure in the noise.
+    </div>
+  </div>
+
   <footer>Rule 30 · elementary cellular automaton · binary 00011110</footer>
 </div>
 
@@ -288,6 +401,167 @@
     `;
     ruleTable.appendChild(item);
   });
+  // ruleItems[i] corresponds to triplet value patterns[i] (7..0); look up by value:
+  const ruleItemByValue = [];
+  patterns.forEach((v,i)=>{ ruleItemByValue[v] = ruleTable.children[i]; });
+
+  // ---- Practice grid: predict the next row, then check ----
+  const P_COLS = 9;
+  const P_ROWS = 5; // row 0 seed + 4 generations; single-cell seed stays clear of the edges
+  const practiceGrid = document.getElementById('practiceGrid');
+  const practiceStepBtn = document.getElementById('practiceStepBtn');
+  const practiceResetBtn = document.getElementById('practiceResetBtn');
+  const practiceStatus = document.getElementById('practiceStatus');
+
+  // truth[r][c] = correct state; guess[r][c] = user's toggled prediction
+  let pTruth = [];
+  let pGuess = [];
+  let pGuessChecked = []; // pGuessChecked[r] true once row r has been revealed/scored
+  let pRevealed = 1; // number of rows whose truth is shown (row 0 = seed)
+  let pCells = [];   // pCells[r][c] -> button element
+
+  function computePracticeTruth(){
+    pTruth = [];
+    const seed = new Uint8Array(P_COLS);
+    seed[Math.floor(P_COLS/2)] = 1;
+    pTruth.push(seed);
+    for(let r=1;r<P_ROWS;r++){
+      const prev = pTruth[r-1];
+      const next = new Uint8Array(P_COLS);
+      for(let c=0;c<P_COLS;c++){
+        const l = c-1 >= 0 ? prev[c-1] : 0;
+        const ce = prev[c];
+        const ri = c+1 < P_COLS ? prev[c+1] : 0;
+        next[c] = ruleOutput((l<<2)|(ce<<1)|ri);
+      }
+      pTruth.push(next);
+    }
+  }
+
+  function buildPracticeGrid(){
+    practiceGrid.innerHTML = '';
+    pCells = [];
+    for(let r=0;r<P_ROWS;r++){
+      const rowEl = document.createElement('div');
+      rowEl.className = 'practice-row';
+      const rowCells = [];
+      for(let c=0;c<P_COLS;c++){
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'pcell';
+        b.setAttribute('aria-label', `row ${r}, column ${c+1}`);
+        b.addEventListener('click', ()=> onPracticeCellClick(r, c));
+        b.addEventListener('mouseenter', ()=> onPracticeCellHover(r, c));
+        b.addEventListener('mouseleave', clearPracticeHover);
+        rowEl.appendChild(b);
+        rowCells.push(b);
+      }
+      practiceGrid.appendChild(rowEl);
+      pCells.push(rowCells);
+    }
+  }
+
+  function onPracticeCellClick(r, c){
+    if(r !== pRevealed) return; // only the next unrevealed row is editable
+    pGuess[r][c] = pGuess[r][c] ? 0 : 1;
+    renderPractice();
+  }
+
+  // Hover a cell -> highlight its 3 parents above and the matching rule in the explainer.
+  // Only meaningful when the row above is revealed (true for the editable row).
+  let pHoverParents = [];
+  let pHoverRuleItem = null;
+  function onPracticeCellHover(r, c){
+    clearPracticeHover();
+    if(r < 1 || r > pRevealed) return;      // need a parent row
+    if(r - 1 >= pRevealed) return;          // parent row not revealed yet
+    const parent = pTruth[r-1];
+    let val = 0;
+    for(let k=-1;k<=1;k++){
+      const pc = c + k;
+      if(pc < 0 || pc >= P_COLS) continue;
+      pCells[r-1][pc].classList.add('nb-hi');
+      pHoverParents.push(pCells[r-1][pc]);
+      if(parent[pc]) val |= (1 << (1 - k)); // k=-1 -> bit2, k=0 -> bit1, k=1 -> bit0
+    }
+    const item = ruleItemByValue[val];
+    if(item){ item.classList.add('hover-rule'); pHoverRuleItem = item; }
+  }
+  function clearPracticeHover(){
+    pHoverParents.forEach(el=> el.classList.remove('nb-hi'));
+    pHoverParents = [];
+    if(pHoverRuleItem){ pHoverRuleItem.classList.remove('hover-rule'); pHoverRuleItem = null; }
+  }
+
+  function renderPractice(){
+    const done = pRevealed >= P_ROWS;
+    for(let r=0;r<P_ROWS;r++){
+      for(let c=0;c<P_COLS;c++){
+        const el = pCells[r][c];
+        el.className = 'pcell';
+        if(r < pRevealed){
+          // revealed truth row
+          if(pTruth[r][c]) el.classList.add('on');
+          el.classList.add('revealed');
+          // show correctness marks for rows the user actually predicted (r >= 1)
+          if(r >= 1 && pGuessChecked[r]){
+            el.classList.add((!!pGuess[r][c]) === (!!pTruth[r][c]) ? 'correct' : 'wrong');
+          }
+        } else if(r === pRevealed && !done){
+          if(pGuess[r][c]) el.classList.add('on');
+          el.classList.add('editable');
+        } else {
+          el.classList.add('locked');
+        }
+      }
+    }
+
+    if(done){
+      practiceStatus.innerHTML = `All ${P_ROWS-1} rows revealed. Press <b>Reset practice</b> to try again with a fresh eye.`;
+    } else if(pRevealed === 1){
+      practiceStatus.innerHTML = `Toggle cells in row 2 to predict, then press <b>Show step</b>.`;
+    } else {
+      const rHuman = pRevealed + 1;
+      practiceStatus.innerHTML = `Row ${pRevealed} checked. Now predict row ${rHuman}, then press <b>Show step</b>.`;
+    }
+  }
+
+  function practiceStep(){
+    if(pRevealed >= P_ROWS) return;
+    const r = pRevealed;
+    // score the row the user just predicted
+    let correct = 0;
+    for(let c=0;c<P_COLS;c++){
+      if((!!pGuess[r][c]) === (!!pTruth[r][c])) correct++;
+    }
+    pGuessChecked[r] = true;
+    pRevealed++;
+    renderPractice();
+    if(correct === P_COLS){
+      practiceStatus.innerHTML = `Row ${r} revealed — <b style="color:#3ddc84">all ${P_COLS} correct!</b> ` +
+        (pRevealed >= P_ROWS ? 'That’s the last row.' : `Now predict row ${pRevealed+1}.`);
+    } else {
+      practiceStatus.innerHTML = `Row ${r} revealed — <b>${correct}/${P_COLS}</b> correct. ` +
+        (pRevealed >= P_ROWS ? 'That’s the last row.' : `Now predict row ${pRevealed+1}.`);
+    }
+  }
+
+  function resetPractice(){
+    computePracticeTruth();
+    pGuess = [];
+    pGuessChecked = [];
+    for(let r=0;r<P_ROWS;r++){
+      pGuess.push(new Uint8Array(P_COLS));
+      pGuessChecked.push(false);
+    }
+    pRevealed = 1;
+    renderPractice();
+  }
+
+  buildPracticeGrid();
+  resetPractice();
+  practiceStepBtn.addEventListener('click', practiceStep);
+  practiceResetBtn.addEventListener('click', resetPractice);
 
   // ---- Canvas / simulation ----
   const canvas = document.getElementById('grid');
@@ -360,15 +634,13 @@
   }
 
   function drawRow(row, y){
-    const gap = cellSize > 3 ? 1 : 0;
-    const size = cellSize - gap;
     ctx.fillStyle = bgColor();
     ctx.fillRect(0, y, canvas.width, cellSize);
     ctx.fillStyle = onColor();
     let live = 0;
     for(let x=0;x<cols;x++){
       if(row[x]){
-        ctx.fillRect(x*cellSize, y, size, size);
+        ctx.fillRect(x*cellSize, y, cellSize, cellSize);
         live++;
       }
     }
@@ -395,7 +667,7 @@
     applyTransform();
   }
 
-  function reset(){
+  function reset(keepView){
     setupCanvas();
     ctx.fillStyle = bgColor();
     ctx.fillRect(0,0,canvas.width,canvas.height);
@@ -405,7 +677,12 @@
     genCountEl.textContent = '0';
     const live = drawRow(curRow, drawY);
     liveCountEl.textContent = live.toString();
-    fitView();
+    if(keepView){
+      computeFitZoom(); // keep fitZoom current so zoom limits stay sane
+      applyTransform();
+    } else {
+      fitView();
+    }
   }
 
   function stopIfPlaying(){
@@ -568,7 +845,7 @@
   });
 
   stepBtn.addEventListener('click', ()=>{ stopIfPlaying(); step(); });
-  resetBtn.addEventListener('click', ()=>{ stopIfPlaying(); reset(); });
+  resetBtn.addEventListener('click', ()=>{ stopIfPlaying(); reset(true); });
   seedSelect.addEventListener('change', ()=>{ stopIfPlaying(); reset(); });
 
   cellSizeInput.addEventListener('input', ()=>{
@@ -601,6 +878,223 @@
 
   // init
   reset();
+})();
+
+// ---- Zoom-in viewer (independent of the simulation above) ----
+(function(){
+  const IMG_W = 4000, IMG_H = 2000;
+  const FADE_START = 2;   // × fit-zoom: hidden image begins to appear
+  const FADE_END = 5;     // × fit-zoom: hidden image fully shown
+
+  const viewport = document.getElementById('zoomViewport');
+  const layers = document.getElementById('zoomLayers');
+  const base = document.getElementById('zoomBase');
+  const detail = document.getElementById('zoomDetail');
+  const zzLabel = document.getElementById('zzLabel');
+  const zzReveal = document.getElementById('zzReveal');
+  const zzChaos = document.getElementById('zzChaos');
+  const zzIn = document.getElementById('zzIn');
+  const zzOut = document.getElementById('zzOut');
+  const zzFit = document.getElementById('zzFit');
+
+  // Offscreen buffer for sampling the visible crop of the base image.
+  const sample = document.createElement('canvas');
+  const sctx = sample.getContext('2d', { willReadFrequently:true });
+  const SAMPLE_MAX = 220; // cap sampled resolution for a cheap per-move recompute
+
+  // Normalized 2×2 block entropy of the currently visible portion of the base image.
+  function measureChaos(){
+    if(!base.complete || !base.naturalWidth) return;
+    const vw = viewport.clientWidth, vh = viewport.clientHeight;
+    // visible rect in image (natural) pixel coordinates
+    let sx0 = clamp((0 - panX) / zoom, 0, IMG_W);
+    let sy0 = clamp((0 - panY) / zoom, 0, IMG_H);
+    let sx1 = clamp((vw - panX) / zoom, 0, IMG_W);
+    let sy1 = clamp((vh - panY) / zoom, 0, IMG_H);
+    let sw = sx1 - sx0, sh = sy1 - sy0;
+    if(sw < 2 || sh < 2){ zzChaos.textContent = '–'; return; }
+    // target sample size: don't upsample beyond the source pixels on screen
+    const scale = Math.min(1, SAMPLE_MAX / Math.max(sw, sh));
+    const dw = Math.max(2, Math.round(sw * scale));
+    const dh = Math.max(2, Math.round(sh * scale));
+    sample.width = dw; sample.height = dh;
+    sctx.imageSmoothingEnabled = false;
+    sctx.drawImage(base, sx0, sy0, sw, sh, 0, 0, dw, dh);
+    const data = sctx.getImageData(0, 0, dw, dh).data;
+    // threshold to 1-bit
+    const bits = new Uint8Array(dw * dh);
+    for(let i = 0, p = 0; i < bits.length; i++, p += 4){
+      bits[i] = data[p] < 128 ? 1 : 0; // dark pixel = "on"
+    }
+    // 2×2 block pattern histogram (non-overlapping)
+    const hist = new Uint32Array(16);
+    let total = 0;
+    for(let y = 0; y + 1 < dh; y += 2){
+      for(let x = 0; x + 1 < dw; x += 2){
+        const a = bits[y*dw + x], b = bits[y*dw + x + 1];
+        const c = bits[(y+1)*dw + x], d = bits[(y+1)*dw + x + 1];
+        hist[(a<<3)|(b<<2)|(c<<1)|d]++;
+        total++;
+      }
+    }
+    if(!total){ zzChaos.textContent = '–'; return; }
+    let H = 0;
+    for(let k = 0; k < 16; k++){
+      if(!hist[k]) continue;
+      const pr = hist[k] / total;
+      H -= pr * Math.log2(pr);
+    }
+    zzChaos.textContent = (H / 4).toFixed(2); // 4 bits = log2(16) = max entropy
+  }
+
+  let chaosTimer = null;
+  function scheduleChaos(){
+    clearTimeout(chaosTimer);
+    chaosTimer = setTimeout(measureChaos, 90);
+  }
+
+  let zoom = 1, panX = 0, panY = 0, fitZoom = 1, userZoomed = false;
+  const minZoomFactor = 1, maxZoom = 60;
+
+  function clamp(v,lo,hi){ return Math.max(lo, Math.min(hi, v)); }
+  function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+  function mid(a,b){ return {x:(a.x+b.x)/2, y:(a.y+b.y)/2}; }
+
+  function computeFitZoom(){
+    const vw = viewport.clientWidth, vh = viewport.clientHeight;
+    fitZoom = Math.min(vw / IMG_W, vh / IMG_H) || 1;
+    return fitZoom;
+  }
+
+  function applyTransform(){
+    layers.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+    const rel = zoom / fitZoom; // 1 = "Fit"
+    zzLabel.textContent = Math.round(rel * 100) + '%';
+    const t = clamp((rel - FADE_START) / (FADE_END - FADE_START), 0, 1);
+    detail.style.opacity = t.toFixed(3);
+    zzReveal.textContent = t <= 0 ? 'hidden' : (t >= 1 ? 'revealed' : Math.round(t*100) + '%');
+    scheduleChaos();
+  }
+
+  function fitView(){
+    computeFitZoom();
+    zoom = fitZoom;
+    panX = (viewport.clientWidth - IMG_W * zoom) / 2;
+    panY = (viewport.clientHeight - IMG_H * zoom) / 2;
+    userZoomed = false;
+    applyTransform();
+  }
+
+  function zoomAround(localX, localY, factor){
+    const ptX = (localX - panX) / zoom, ptY = (localY - panY) / zoom;
+    const newZoom = clamp(zoom * factor, fitZoom * minZoomFactor, maxZoom);
+    panX = localX - ptX * newZoom;
+    panY = localY - ptY * newZoom;
+    zoom = newZoom;
+    userZoomed = true;
+    applyTransform();
+  }
+
+  viewport.addEventListener('wheel', e=>{
+    e.preventDefault();
+    const rect = viewport.getBoundingClientRect();
+    zoomAround(e.clientX - rect.left, e.clientY - rect.top, Math.exp(-e.deltaY * 0.0015));
+  }, {passive:false});
+
+  function zoomByCenter(factor){
+    zoomAround(viewport.clientWidth/2, viewport.clientHeight/2, factor);
+  }
+  zzIn.addEventListener('click', ()=> zoomByCenter(1.4));
+  zzOut.addEventListener('click', ()=> zoomByCenter(1/1.4));
+  zzFit.addEventListener('click', fitView);
+
+  // pan + pinch
+  const pointers = new Map();
+  let isPanning = false, panStart = null, startPanX = 0, startPanY = 0;
+  let pinchStartDist = null, pinchStartZoom = null, pinchStartPan = null;
+
+  viewport.addEventListener('pointerdown', e=>{
+    viewport.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if(pointers.size === 1){
+      isPanning = true;
+      panStart = {x:e.clientX, y:e.clientY};
+      startPanX = panX; startPanY = panY;
+      viewport.classList.add('dragging');
+    } else if(pointers.size === 2){
+      isPanning = false;
+      const pts = [...pointers.values()];
+      pinchStartDist = dist(pts[0], pts[1]);
+      pinchStartZoom = zoom;
+      pinchStartPan = {x:panX, y:panY};
+    }
+  });
+
+  viewport.addEventListener('pointermove', e=>{
+    if(!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if(pointers.size === 1 && isPanning){
+      panX = startPanX + (e.clientX - panStart.x);
+      panY = startPanY + (e.clientY - panStart.y);
+      applyTransform();
+    } else if(pointers.size === 2){
+      const pts = [...pointers.values()];
+      const d2 = dist(pts[0], pts[1]);
+      const newZoom = clamp(pinchStartZoom * (d2 / pinchStartDist), fitZoom * minZoomFactor, maxZoom);
+      const rect = viewport.getBoundingClientRect();
+      const m = mid(pts[0], pts[1]);
+      const localX = m.x - rect.left, localY = m.y - rect.top;
+      const ptX = (localX - pinchStartPan.x) / pinchStartZoom;
+      const ptY = (localY - pinchStartPan.y) / pinchStartZoom;
+      panX = localX - ptX * newZoom;
+      panY = localY - ptY * newZoom;
+      zoom = newZoom;
+      userZoomed = true;
+      applyTransform();
+    }
+  });
+
+  function endPointer(e){
+    pointers.delete(e.pointerId);
+    viewport.classList.remove('dragging');
+    if(pointers.size === 0){
+      isPanning = false;
+    } else if(pointers.size === 1){
+      const remaining = [...pointers.values()][0];
+      isPanning = true;
+      panStart = {x:remaining.x, y:remaining.y};
+      startPanX = panX; startPanY = panY;
+    }
+  }
+  viewport.addEventListener('pointerup', endPointer);
+  viewport.addEventListener('pointercancel', endPointer);
+
+  window.addEventListener('resize', ()=>{ if(!userZoomed) fitView(); });
+
+  if(base.complete) fitView(); else base.addEventListener('load', fitView);
+  fitView();
+})();
+
+// ---- Collapsible cards ----
+(function(){
+  document.querySelectorAll('.card > h2').forEach(h=>{
+    h.setAttribute('role', 'button');
+    h.setAttribute('tabindex', '0');
+    const card = h.parentElement;
+    const toggle = ()=>{
+      card.classList.toggle('collapsed');
+      h.setAttribute('aria-expanded', String(!card.classList.contains('collapsed')));
+      // let a freshly-expanded viewer recalc its fit
+      if(!card.classList.contains('collapsed')){
+        window.dispatchEvent(new Event('resize'));
+      }
+    };
+    h.setAttribute('aria-expanded', 'true');
+    h.addEventListener('click', toggle);
+    h.addEventListener('keydown', e=>{
+      if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggle(); }
+    });
+  });
 })();
 </script>
 </body>
