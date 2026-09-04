@@ -3,6 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <title>Wolfram Rule 30 — Interactive Explorer</title>
+<script>
+  // Set the theme before first paint to avoid a flash.
+  (function(){
+    try{
+      var p = new URLSearchParams(location.search).get('theme');
+      var t = (p === 'light' || p === 'dark') ? p : localStorage.getItem('r30-theme');
+      document.documentElement.setAttribute('data-theme', t === 'light' ? 'light' : 'dark');
+    }catch(e){ document.documentElement.setAttribute('data-theme', 'dark'); }
+  })();
+</script>
 <style>
   :root{
     --bg:#0f1115;
@@ -15,6 +25,24 @@
     --on:#111111;
     --off:#ffffff;
     --border:#2a2f3a;
+    --cell:#3a4150;        /* "off" cell fill in the rule table / practice grid */
+    --cell-border:#4a5262;
+    --track:#2a2f3a;       /* chaos meter track */
+  }
+  :root[data-theme="light"]{
+    --bg:#f6f7f9;
+    --panel:#ffffff;
+    --panel2:#eef1f4;
+    --ink:#1b1f27;
+    --dim:#5b6472;
+    --accent:#e8532c;
+    --accent2:#0d9bc7;
+    --on:#111111;
+    --off:#ffffff;
+    --border:#d6dae0;
+    --cell:#c4cbd4;
+    --cell-border:#a9b2bd;
+    --track:#dde1e6;
   }
   *{box-sizing:border-box;}
   body{
@@ -88,16 +116,16 @@
   .triplet{display:flex;gap:2px;justify-content:center;margin-bottom:6px;}
   .cell{
     width:16px;height:16px;border-radius:3px;
-    background:#3a4150;
-    border:1px solid #4a5262;
+    background:var(--cell);
+    border:1px solid var(--cell-border);
   }
   .cell.on{background:var(--ink);border-color:var(--ink);}
   .arrow{color:var(--dim);font-size:0.7rem;margin:2px 0;}
   .result{
     width:16px;height:16px;border-radius:3px;
     margin:0 auto;
-    background:#3a4150;
-    border:1px solid #4a5262;
+    background:var(--cell);
+    border:1px solid var(--cell-border);
   }
   .result.on{background:var(--ink);border-color:var(--ink);}
   .rule-label{font-size:0.65rem;color:var(--dim);margin-top:4px;}
@@ -220,8 +248,8 @@
   .pcell{
     width:44px;height:44px;
     border-radius:8px;
-    background:#3a4150;
-    border:1px solid #4a5262;
+    background:var(--cell);
+    border:1px solid var(--cell-border);
     padding:0;
     transition:background .1s ease, box-shadow .1s ease, border-color .1s ease;
   }
@@ -257,17 +285,125 @@
     user-select:none;
   }
   #zoomDetail{opacity:0;}
+
+  .chaos-meter{
+    margin-top:14px;
+    padding:14px 16px;
+    background:var(--panel2);
+    border:1px solid var(--border);
+    border-radius:10px;
+  }
+  .chaos-head{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:12px;
+    margin-bottom:10px;
+  }
+  .chaos-label{
+    font-size:0.9rem;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    color:var(--dim);
+  }
+  .chaos-sub{
+    text-transform:none;
+    letter-spacing:0;
+    font-size:0.78rem;
+    opacity:0.7;
+  }
+  .chaos-value-wrap{
+    position:relative;
+    display:inline-grid;
+    place-items:center end;
+    min-width:3ch;
+  }
+  .chaos-value{
+    font-size:2rem;
+    font-weight:700;
+    line-height:1;
+    color:var(--ink);
+    font-variant-numeric:tabular-nums;
+    grid-area:1/1;
+    transition:opacity .15s ease;
+  }
+  .chaos-emoji{
+    grid-area:1/1;
+    font-size:1.9rem;
+    line-height:1;
+    opacity:0;
+    transition:opacity .15s ease;
+    white-space:nowrap;
+  }
+  .chaos-track{
+    height:10px;
+    border-radius:6px;
+    background:var(--track);
+    overflow:hidden;
+  }
+  .chaos-fill{
+    height:100%;
+    width:0%;
+    border-radius:6px;
+    background:linear-gradient(90deg, #6b7280, var(--accent));
+    transition:width .12s ease, background .2s ease;
+  }
+  .chaos-fill.rainbow{
+    background:linear-gradient(90deg,#ff4d4d,#ffa94d,#ffe14d,#4dd97a,#4db8ff,#9d6bff,#ff5db1);
+  }
+
+  /* Page options — fixed top-right icon toggles */
+  .page-opts{
+    position:fixed;
+    top:10px;
+    right:12px;
+    display:flex;
+    gap:4px;
+    z-index:10;
+  }
+  .page-opts button{
+    width:34px;
+    height:34px;
+    padding:0;
+    display:grid;
+    place-items:center;
+    font-size:1rem;
+    line-height:1;
+    background:transparent;
+    border-color:transparent;
+    color:var(--dim);
+    opacity:0.55;
+    transition:opacity .15s ease, border-color .15s ease, color .15s ease, background .15s ease;
+  }
+  .page-opts button:hover{
+    opacity:1;
+    color:var(--ink);
+    background:var(--panel2);
+    border-color:var(--border);
+  }
+  .page-opts button.active{
+    opacity:1;
+    color:var(--accent2);
+  }
+  body.no-prose .prose{ display:none; }
+  body.no-prose .card h2{ margin-bottom:14px; }
+  body.no-prose .card.collapsed h2{ margin-bottom:0; }
 </style>
 </head>
 <body>
 <div class="wrap">
 
   <h1>Wolfram Rule 30</h1>
-  <div class="sub">One of the most famous elementary cellular automata — click the grid to seed it, or press play and watch it evolve.</div>
+  <div class="sub prose">One of the most famous elementary cellular automata — click the grid to seed it, or press play and watch it evolve.</div>
+
+  <div class="page-opts">
+    <button id="themeToggle" type="button" title="Toggle light / dark" aria-label="Toggle light / dark">☾</button>
+    <button id="proseToggle" type="button" title="Show / hide explanatory text" aria-label="Show / hide explanatory text" aria-pressed="false">¶</button>
+  </div>
 
   <div class="card">
     <h2>The Rule</h2>
-    <p style="color:var(--dim); font-size:0.9rem; margin-top:0;">
+    <p class="prose" style="color:var(--dim); font-size:0.9rem; margin-top:0;">
       Every cell's next state depends only on itself and its two neighbors. Rule 30 in binary is
       <code style="color:var(--accent2)">00011110</code> — out of the 8 possible 3-cell patterns,
       <b style="color:var(--ink)">four</b> produce a live cell next generation. Starting from a single cell,
@@ -280,7 +416,7 @@
 
   <div class="card">
     <h2>Try It Yourself</h2>
-    <p style="color:var(--dim); font-size:0.9rem; margin-top:0;">
+    <p class="prose" style="color:var(--dim); font-size:0.9rem; margin-top:0;">
       The top row is the seed — a single lit cell. Toggle the cells in the next row to predict what
       Rule 30 produces, then press <b style="color:var(--ink)">Show step</b> to reveal the real values and
       check your guesses. Correct cells get a green ring, wrong ones red. Then predict the row after that.
@@ -336,7 +472,7 @@
       <span>Live cells: <b id="liveCount">0</b></span>
       <span>Canvas: <b id="dimsLabel">–</b></span>
     </div>
-    <div class="hint">
+    <div class="hint prose">
       Tip: tap/click a cell in the top row to toggle it before pressing Play (only while at generation 0). Drag
       to pan, pinch or scroll to zoom — works while playing or paused. Try "Single center cell" first — Rule 30
       turns that one lit cell into a widening, irregular triangle with no repeating pattern down the middle.
@@ -345,7 +481,7 @@
 
   <div class="card">
     <h2>Zoom In</h2>
-    <p style="color:var(--dim); font-size:0.9rem; margin-top:0;">
+    <p class="prose" style="color:var(--dim); font-size:0.9rem; margin-top:0;">
       A finished run — 1000 generations from a single cell, rendered at 4000×2000. Drag to pan, scroll or
       pinch to zoom.
     </p>
@@ -363,14 +499,18 @@
         <button id="zzFit" style="margin-left:auto;font-size:0.78rem;padding:4px 10px;">Fit</button>
       </div>
     </div>
-    <div class="stats">
-      <span>Zoom: <b id="zzReveal">hidden</b></span>
-      <span title="Normalized 2×2 block entropy of the visible crop — 1.00 = maximally disordered, 0 = perfectly regular">Chaos (visible crop): <b id="zzChaos">–</b></span>
+    <div class="chaos-meter" title="Normalized 2×2 block entropy of the visible crop — 1.00 = maximally disordered, 0 = perfectly regular">
+      <div class="chaos-head">
+        <span class="chaos-label">Chaos <span class="chaos-sub">(visible crop)</span></span>
+        <span class="chaos-value-wrap">
+          <span class="chaos-value" id="zzChaos">–</span>
+          <span class="chaos-emoji" id="zzChaosEmoji">🌈❤️</span>
+        </span>
+      </div>
+      <div class="chaos-track"><div class="chaos-fill" id="zzChaosBar"></div></div>
     </div>
-    <div class="hint">
-      The number is the <b>normalized block entropy</b> of whatever's on screen: it counts how evenly the
-      2×2 pixel patterns are distributed. The chaotic bulk sits near 1.00; it dips over the sparse tip, the
-      diagonal edge lanes, and — faintly — wherever there's hidden structure in the noise.
+    <div class="stats" style="margin-top:10px;">
+      <span>Zoom: <b id="zzReveal">hidden</b></span>
     </div>
   </div>
 
@@ -886,6 +1026,10 @@
   const FADE_START = 2;   // × fit-zoom: hidden image begins to appear
   const FADE_END = 5;     // × fit-zoom: hidden image fully shown
 
+  // Hidden face location in image pixels (padded a little for the "getting close" cue).
+  const FACE = { x0:1600, y0:1050, x1:1950, y1:1500 };
+  const FACE_ZOOM = 2;    // × fit-zoom before the payoff can begin fading in
+
   const viewport = document.getElementById('zoomViewport');
   const layers = document.getElementById('zoomLayers');
   const base = document.getElementById('zoomBase');
@@ -893,6 +1037,8 @@
   const zzLabel = document.getElementById('zzLabel');
   const zzReveal = document.getElementById('zzReveal');
   const zzChaos = document.getElementById('zzChaos');
+  const zzChaosEmoji = document.getElementById('zzChaosEmoji');
+  const zzChaosBar = document.getElementById('zzChaosBar');
   const zzIn = document.getElementById('zzIn');
   const zzOut = document.getElementById('zzOut');
   const zzFit = document.getElementById('zzFit');
@@ -900,9 +1046,97 @@
   // Offscreen buffer for sampling the visible crop of the base image.
   const sample = document.createElement('canvas');
   const sctx = sample.getContext('2d', { willReadFrequently:true });
-  const SAMPLE_MAX = 220; // cap sampled resolution for a cheap per-move recompute
+  const SAMPLE_MAX = 200; // cap sampled grid edge (cost); below this we sample 1:1 with source pixels
 
-  // Normalized 2×2 block entropy of the currently visible portion of the base image.
+  // Lempel–Ziv (LZ76) complexity of a binary sequence: number of distinct
+  // phrases produced by the parse. Normalized by n/log2(n) — the expected LZ
+  // complexity of a random binary string — so ~1 means "incompressible / random",
+  // low means "repetitive / structured". Scale-invariant.
+  function lzNorm(seq){
+    const n = seq.length;
+    if(n < 16) return 1;
+    let i = 0, c = 1, l = 1, k = 1, kmax = 1;
+    while(l + k <= n){
+      if(seq[i + k - 1] === seq[l + k - 1]){
+        k++;
+        if(l + k > n){ c++; break; }
+      } else {
+        if(k > kmax) kmax = k;
+        i++;
+        if(i === l){
+          c++;
+          l += kmax;
+          i = 0;
+          k = 1;
+          kmax = 1;
+        } else {
+          k = 1;
+        }
+      }
+    }
+    const norm = n / Math.log2(n);
+    return clamp(c / norm, 0, 1.5);
+  }
+
+  // Strongest normalized autocorrelation peak of a 1-D profile at lags 2..maxLag.
+  // A clear peak means the profile repeats with that pitch (tiling, stripes).
+  // Short profiles produce spurious peaks, so require a minimum length and only
+  // count a lag when enough overlapping samples support it.
+  function periodicity(profile, maxLag){
+    const n = profile.length;
+    if(n < 24) return 0; // too short to trust an autocorrelation peak
+    let mean = 0;
+    for(let i = 0; i < n; i++) mean += profile[i];
+    mean /= n;
+    let denom = 0;
+    for(let i = 0; i < n; i++){ const d = profile[i] - mean; denom += d * d; }
+    if(denom < 1e-9) return 1; // perfectly flat profile = maximally "structured"
+    let peak = 0;
+    const lim = Math.min(maxLag, Math.floor(n / 2));
+    for(let lag = 2; lag <= lim; lag++){
+      const m = n - lag;
+      if(m < 16) break; // not enough overlap for this lag
+      let num = 0;
+      for(let i = 0; i < m; i++){
+        num += (profile[i] - mean) * (profile[i + lag] - mean);
+      }
+      const r = num / denom; // already normalised by the full variance
+      if(r > peak) peak = r;
+    }
+    return clamp(peak, 0, 1);
+  }
+
+  // Central, well-populated slice of a diagonal projection (the ends are averaged
+  // over only a few pixels and are noisy).
+  function trimEnds(arr, keepFrac){
+    const n = arr.length;
+    const cut = Math.floor(n * (1 - keepFrac) / 2);
+    return arr.subarray(cut, n - cut);
+  }
+
+  // How much the visible crop is zeroed in on the hidden face: 0 = not, 1 = fully.
+  // Requires being zoomed past FACE_ZOOM and the crop mostly inside the face box.
+  function faceCloseness(vx0, vy0, vx1, vy1){
+    const rel = zoom / fitZoom;
+    if(rel < FACE_ZOOM) return 0;
+    const ix0 = Math.max(vx0, FACE.x0), iy0 = Math.max(vy0, FACE.y0);
+    const ix1 = Math.min(vx1, FACE.x1), iy1 = Math.min(vy1, FACE.y1);
+    const iw = ix1 - ix0, ih = iy1 - iy0;
+    if(iw <= 0 || ih <= 0) return 0;
+    const cropArea = (vx1 - vx0) * (vy1 - vy0);
+    const frac = (iw * ih) / cropArea; // fraction of the view occupied by the face box
+    // ramp: 25% of view inside the box -> 0, 75% -> 1
+    return clamp((frac - 0.25) / (0.75 - 0.25), 0, 1);
+  }
+
+  function smoothstep(edge0, edge1, x){
+    const t = clamp((x - edge0) / (edge1 - edge0), 0, 1);
+    return t * t * (3 - 2 * t);
+  }
+
+  // Chaos of the visible crop = LZ-incompressibility, gated by structure detectors
+  // (directional periodicity + an LZ floor). Sampled at ~1 grid cell per visible
+  // source pixel so the reading doesn't drift with zoom; only capped for cost.
   function measureChaos(){
     if(!base.complete || !base.naturalWidth) return;
     const vw = viewport.clientWidth, vh = viewport.clientHeight;
@@ -912,11 +1146,11 @@
     let sx1 = clamp((vw - panX) / zoom, 0, IMG_W);
     let sy1 = clamp((vh - panY) / zoom, 0, IMG_H);
     let sw = sx1 - sx0, sh = sy1 - sy0;
-    if(sw < 2 || sh < 2){ zzChaos.textContent = '–'; return; }
-    // target sample size: don't upsample beyond the source pixels on screen
-    const scale = Math.min(1, SAMPLE_MAX / Math.max(sw, sh));
-    const dw = Math.max(2, Math.round(sw * scale));
-    const dh = Math.max(2, Math.round(sh * scale));
+    if(sw < 4 || sh < 4){ zzChaos.textContent = '–'; zzChaosBar.style.width = '0%'; return; }
+    // one grid cell per source pixel, capped at SAMPLE_MAX on the long edge
+    const gridScale = Math.min(1, SAMPLE_MAX / Math.max(sw, sh));
+    const dw = Math.max(4, Math.round(sw * gridScale));
+    const dh = Math.max(4, Math.round(sh * gridScale));
     sample.width = dw; sample.height = dh;
     sctx.imageSmoothingEnabled = false;
     sctx.drawImage(base, sx0, sy0, sw, sh, 0, 0, dw, dh);
@@ -926,25 +1160,81 @@
     for(let i = 0, p = 0; i < bits.length; i++, p += 4){
       bits[i] = data[p] < 128 ? 1 : 0; // dark pixel = "on"
     }
-    // 2×2 block pattern histogram (non-overlapping)
-    const hist = new Uint32Array(16);
-    let total = 0;
-    for(let y = 0; y + 1 < dh; y += 2){
-      for(let x = 0; x + 1 < dw; x += 2){
-        const a = bits[y*dw + x], b = bits[y*dw + x + 1];
-        const c = bits[(y+1)*dw + x], d = bits[(y+1)*dw + x + 1];
-        hist[(a<<3)|(b<<2)|(c<<1)|d]++;
-        total++;
+
+    // 1) LZ incompressibility of the grid read in boustrophedon (serpentine) order,
+    //    which keeps horizontal neighbours adjacent across row boundaries.
+    const seq = new Uint8Array(dw * dh);
+    let si = 0;
+    for(let y = 0; y < dh; y++){
+      if((y & 1) === 0){
+        for(let x = 0; x < dw; x++) seq[si++] = bits[y*dw + x];
+      } else {
+        for(let x = dw - 1; x >= 0; x--) seq[si++] = bits[y*dw + x];
       }
     }
-    if(!total){ zzChaos.textContent = '–'; return; }
-    let H = 0;
-    for(let k = 0; k < 16; k++){
-      if(!hist[k]) continue;
-      const pr = hist[k] / total;
-      H -= pr * Math.log2(pr);
+    const lz = lzNorm(seq); // ~0 structured .. ~1 random
+
+    // 2) periodicity in four directions — rows, columns, and both diagonals
+    //    (the edge "lanes" in Rule 30 run diagonally). Any strong repeat pitch
+    //    means the region is structured, not chaotic.
+    const rowProf = new Float32Array(dh);
+    const colProf = new Float32Array(dw);
+    for(let y = 0; y < dh; y++){
+      let s = 0;
+      for(let x = 0; x < dw; x++){ const v = bits[y*dw + x]; s += v; colProf[x] += v; }
+      rowProf[y] = s / dw;
     }
-    zzChaos.textContent = (H / 4).toFixed(2); // 4 bits = log2(16) = max entropy
+    for(let x = 0; x < dw; x++) colProf[x] /= dh;
+    // diagonal projections: index by (x - y) and (x + y)
+    const d1 = new Float32Array(dw + dh);      // x - y + dh
+    const d1n = new Float32Array(dw + dh);
+    const d2 = new Float32Array(dw + dh);      // x + y
+    const d2n = new Float32Array(dw + dh);
+    for(let y = 0; y < dh; y++){
+      for(let x = 0; x < dw; x++){
+        const v = bits[y*dw + x];
+        const a = x - y + dh, b = x + y;
+        d1[a] += v; d1n[a]++;
+        d2[b] += v; d2n[b]++;
+      }
+    }
+    for(let i = 0; i < d1.length; i++){ if(d1n[i]) d1[i] /= d1n[i]; if(d2n[i]) d2[i] /= d2n[i]; }
+    const d1c = trimEnds(d1, 0.6), d2c = trimEnds(d2, 0.6);
+
+    const per = Math.max(
+      periodicity(rowProf, Math.floor(dh / 3)),
+      periodicity(colProf, Math.floor(dw / 3)),
+      periodicity(d1c, Math.floor(d1c.length / 4)),
+      periodicity(d2c, Math.floor(d2c.length / 4))
+    );
+
+    // Structure penalty: strong periodicity or high compressibility subtracts
+    // from the score, but partial structure only partially discounts it — so a
+    // region that's part lanes, part noise still reads as somewhat chaotic.
+    const periodicityPenalty = smoothstep(0.30, 0.75, per);   // 0 below .30, 1 by .75
+    const compressPenalty    = 1 - smoothstep(0.30, 0.70, lz); // 0 above .70, 1 by .30
+    const structure = clamp(Math.max(periodicityPenalty, compressPenalty), 0, 1);
+    let raw = clamp(lz, 0, 1) * (1 - 0.85 * structure);
+
+    // rescale the surviving band so the chaotic bulk lands near the top
+    const CHAOS_LO = 0.12, CHAOS_HI = 0.80;
+    const chaos = clamp((raw - CHAOS_LO) / (CHAOS_HI - CHAOS_LO), 0, 1);
+
+    const close = faceCloseness(sx0, sy0, sx1, sy1);
+    if(close > 0){
+      // crossfade the readout into a rainbow-heart payoff; bar eases toward 50%
+      zzChaos.style.opacity = String(1 - close);
+      zzChaosEmoji.style.opacity = String(close);
+      zzChaosBar.classList.add('rainbow');
+      const w = chaos * (1 - close) + 0.5 * close;
+      zzChaosBar.style.width = (w * 100).toFixed(1) + '%';
+    } else {
+      zzChaos.style.opacity = '1';
+      zzChaosEmoji.style.opacity = '0';
+      zzChaosBar.classList.remove('rainbow');
+      zzChaosBar.style.width = (chaos * 100).toFixed(1) + '%';
+    }
+    zzChaos.textContent = chaos.toFixed(2);
   }
 
   let chaosTimer = null;
@@ -1075,25 +1365,91 @@
   fitView();
 })();
 
-// ---- Collapsible cards ----
+// ---- Page options + collapsible cards, mirrored to the URL ----
+// ?expand=NNNN  one digit per section (order = DOM order): 1 = expanded, 0 = collapsed.
+//               absent / short -> missing digits default to expanded.
+// ?prose=0      hide all explanatory prose.  ?prose=1 or absent -> shown.
+// ?theme=light  light palette.  ?theme=dark or absent -> dark (also read from localStorage).
 (function(){
-  document.querySelectorAll('.card > h2').forEach(h=>{
+  const cards = [...document.querySelectorAll('.card')];
+  const proseToggle = document.getElementById('proseToggle');
+  const themeToggle = document.getElementById('themeToggle');
+  const params = new URLSearchParams(location.search);
+  const root = document.documentElement;
+
+  function writeURL(){
+    const p = new URLSearchParams(location.search);
+    p.set('expand', cards.map(c => c.classList.contains('collapsed') ? '0' : '1').join(''));
+    if(document.body.classList.contains('no-prose')) p.set('prose', '0');
+    else p.delete('prose');
+    if(root.getAttribute('data-theme') === 'light') p.set('theme', 'light');
+    else p.delete('theme');
+    history.replaceState(null, '', location.pathname + '?' + p.toString());
+  }
+
+  // ---- theme ----
+  let theme;
+  try { theme = localStorage.getItem('r30-theme'); } catch(e){ theme = null; }
+  if(params.get('theme') === 'light' || params.get('theme') === 'dark') theme = params.get('theme');
+  const light = theme === 'light';
+  function applyTheme(isLight){
+    root.setAttribute('data-theme', isLight ? 'light' : 'dark');
+    themeToggle.textContent = isLight ? '☀' : '☾';
+    themeToggle.classList.toggle('active', isLight);
+    try { localStorage.setItem('r30-theme', isLight ? 'light' : 'dark'); } catch(e){}
+  }
+  applyTheme(light);
+  themeToggle.addEventListener('click', ()=>{
+    applyTheme(root.getAttribute('data-theme') !== 'light');
+    window.dispatchEvent(new Event('resize'));
+    writeURL();
+  });
+
+  function setCollapsed(card, collapsed){
+    card.classList.toggle('collapsed', collapsed);
+    const h = card.querySelector(':scope > h2');
+    if(h) h.setAttribute('aria-expanded', String(!collapsed));
+  }
+
+  // apply expand= from the URL
+  const exp = (params.get('expand') || '').replace(/[^01]/g, '');
+  cards.forEach((card, i) => {
+    const ch = exp[i];
+    setCollapsed(card, ch === '0'); // absent or '1' -> expanded
+  });
+
+  // apply prose= from the URL
+  const proseOff = params.get('prose') === '0';
+  document.body.classList.toggle('no-prose', proseOff);
+  proseToggle.classList.toggle('active', proseOff);
+  proseToggle.setAttribute('aria-pressed', String(proseOff));
+
+  // wire up section headers
+  cards.forEach(card => {
+    const h = card.querySelector(':scope > h2');
+    if(!h) return;
     h.setAttribute('role', 'button');
     h.setAttribute('tabindex', '0');
-    const card = h.parentElement;
     const toggle = ()=>{
-      card.classList.toggle('collapsed');
-      h.setAttribute('aria-expanded', String(!card.classList.contains('collapsed')));
-      // let a freshly-expanded viewer recalc its fit
-      if(!card.classList.contains('collapsed')){
-        window.dispatchEvent(new Event('resize'));
-      }
+      const nowCollapsed = !card.classList.contains('collapsed');
+      setCollapsed(card, nowCollapsed);
+      if(!nowCollapsed) window.dispatchEvent(new Event('resize')); // let a shown viewer refit
+      writeURL();
     };
-    h.setAttribute('aria-expanded', 'true');
     h.addEventListener('click', toggle);
     h.addEventListener('keydown', e=>{
       if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggle(); }
     });
+  });
+
+  // wire up the prose toggle
+  proseToggle.addEventListener('click', ()=>{
+    const off = !document.body.classList.contains('no-prose');
+    document.body.classList.toggle('no-prose', off);
+    proseToggle.classList.toggle('active', off);
+    proseToggle.setAttribute('aria-pressed', String(off));
+    window.dispatchEvent(new Event('resize'));
+    writeURL();
   });
 })();
 </script>
